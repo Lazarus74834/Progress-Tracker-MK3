@@ -1,0 +1,11 @@
+Name,P-Number,DT,SAA,SH,NAV,FC,FA,EXP,PHYS,CE,MK,JCIC,SCIC,AT,CIS
+Cadet Sgt John Smith,P123456,3*,3*,3*,3*,3*,3*,3*,3*,3*,3*,3*,2*,3*,2*
+Cadet Cpl Jane Doe,P789012,2*,2*,2*,2*,2*,2*,2*,2*,2*,1*,1*,1*,2*,2*
+Cadet LCpl Bob Johnson,P345678,2*,2*,2*,2*,2*,1*,2*,2*,2*,1*,1*,,1*,1*
+Cadet Alice Williams,P901234,1*,1*,1*,1*,1*,1*,1*,1*,1*,1*,,,1*,1*
+Cadet RSM Michael Brown,P567890,4*,4*,4*,3*,3*,3*,3*,3*,3*,3*,3*,3*,3*,3*
+Cadet CSM Emma Davis,P234567,4*,4*,3*,3*,3*,3*,3*,3*,3*,2*,3*,2*,3*,3*
+Cadet James Wilson,P890123,Basic,Basic,Basic,Basic,Basic,Basic,Basic,Basic,,,,,Basic,Basic
+Cadet Thomas Lee,P456789,,,,,,,,,,,,,, 
+Cadet SSgt Sarah Miller,P012345,3*,3*,3*,3*,3*,3*,3*,3*,3*,2*,3*,2*,3*,2*
+Cadet Mark Taylor,P678901,1*,1*,1*,1*,1*,1*,1*,Basic,1*,,,,,1*
