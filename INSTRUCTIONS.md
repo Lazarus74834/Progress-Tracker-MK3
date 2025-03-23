@@ -1,84 +1,134 @@
-# Progress Tracker MK3 - Build and Run Instructions
+# Mk3 Progress Tracker Deployment Instructions
 
-This document provides instructions for building and running the Progress Tracker MK3 application.
+## Option 1: Deploy with Netlify (Recommended for Simplicity)
 
-## Prerequisites
+Netlify offers a simple, free hosting solution that's perfect for this application.
 
-- Node.js (v14 or higher)
-- npm (comes with Node.js)
+### Prerequisites:
+- Git installed on your computer
+- GitHub account (optional, but recommended)
+- Netlify account (free)
 
-## Local Development Setup
+### Steps:
 
-1. Clone or download the repository
+1. **Create a GitHub repository** (if you don't already have one):
+   - Go to github.com and sign in
+   - Click the "+" icon in the top right and select "New repository"
+   - Name your repository (e.g., "mk3-progress-tracker")
+   - Make it public or private as you prefer
+   - Click "Create repository"
+   - Follow GitHub's instructions to push your code to the repository
 
-2. Install server dependencies:
-   ```
-   npm install
-   ```
+2. **Deploy to Netlify**:
+   - Sign up for a free Netlify account at netlify.com
+   - From your Netlify dashboard, click "New site from Git"
+   - Choose GitHub and authorize Netlify to access your repositories
+   - Select your mk3-progress-tracker repository
+   - Configure the build settings:
+     - Build command: `cd client && npm install && npm run build`
+     - Publish directory: `client/build`
+   - Click "Deploy site"
 
-3. Install client dependencies:
-   ```
-   cd client
-   npm install
-   cd ..
-   ```
+3. **Configure environment variables** (if needed):
+   - In Netlify dashboard, go to Site settings > Build & deploy > Environment
+   - Add any required environment variables
 
-4. Start the development server (both client and server):
-   ```
-   npm run dev
-   ```
+Your site will be live at a Netlify URL (e.g., https://your-site-name.netlify.app).
 
-   This will run both the frontend React application and the backend Express server concurrently.
-   - The React frontend will be available at http://localhost:3000
-   - The Express backend will be running on http://localhost:5000
+## Option 2: Deploy with Heroku
 
-## Using the Application
+Heroku provides a platform for easily deploying both the frontend and backend together.
 
-1. Once the application is running, open your browser to http://localhost:3000
+### Prerequisites:
+- Git installed on your computer
+- Heroku account (free)
+- Heroku CLI installed
 
-2. Upload a CSV file with cadet data. The file should include:
-   - Name (including rank)
-   - P-Number
-   - Subject achievements (DT, SAA, SH, etc.)
+### Steps:
 
-   A sample CSV file is provided in sample_data.csv at the root of the project.
-
-3. The application will process the data and display:
-   - A statistical summary
-   - An interactive color-coded progress table
-   - An option to download an Excel report
-
-## Production Deployment
-
-For deployment to Heroku:
-
-1. Create a Heroku account and install the Heroku CLI
-
-2. Log in to Heroku:
+1. **Create a Heroku app**:
    ```
    heroku login
+   heroku create acf-progress-tracker
    ```
 
-3. Create a Heroku app:
+2. **Push to Heroku**:
    ```
-   heroku create mk3-progress-tracker
-   ```
-
-4. Deploy to Heroku:
-   ```
+   git add .
+   git commit -m "Ready for deployment"
    git push heroku main
    ```
+   
+   If you're not using git yet, initialize it first:
+   ```
+   git init
+   git add .
+   git commit -m "Initial commit"
+   ```
 
-The application includes all the necessary configuration for Heroku deployment in the package.json file.
+3. **Open the deployed app**:
+   ```
+   heroku open
+   ```
 
-## Project Structure
+Your app will be available at https://acf-progress-tracker.herokuapp.com (or whatever name you chose).
 
-- `/client`: React frontend application
-- `/server`: Express backend application
-- `/uploads`: Directory where uploaded files are stored temporarily
+## Option 3: Local Network Deployment
 
-## Additional Notes
+For running on a local network (e.g., within a detachment).
 
-- The application processes cadet data according to Army Cadet Force (ACF) progression criteria
-- Star levels are determined based on the specific subject requirements outlined in the README.md
-- The Excel output includes color-coding for easy visual identification of progress
+### Prerequisites:
+- Node.js installed on the server computer
+- Basic knowledge of command line
+
+### Steps:
+
+1. **Build the client**:
+   ```
+   cd client
+   npm run build
+   ```
+
+2. **Install the serve package**:
+   ```
+   npm install -g serve
+   ```
+
+3. **Start the server**:
+   ```
+   cd ..
+   npm start
+   ```
+
+4. **Access the application**:
+   - On the server machine: http://localhost:5001
+   - From other computers on the same network: http://SERVER-IP-ADDRESS:5001
+
+## Customization
+
+### Logo Replacement:
+- Replace the logo files in `/client/public/images/` with your own versions
+- Keep the same filenames for easy replacement
+
+### Theming:
+- Color schemes can be adjusted in the Tailwind configuration file at `/client/tailwind.config.js`
+- Individual component styling can be modified in their respective files in `/client/src/components/`
+
+## Troubleshooting
+
+### Common Issues:
+
+1. **File Upload Errors**:
+   - Ensure the CSV file is in the correct format as exported from Westminster
+   - Check that the column headers match what the application expects
+
+2. **Deployment Errors**:
+   - Verify that all dependencies are correctly listed in package.json
+   - Check for any environment variables that might be missing
+
+3. **Display Issues**:
+   - Clear your browser cache
+   - Try a different browser
+   - Ensure JavaScript is enabled
+
+For additional help, consult the README.md file or contact the developer.

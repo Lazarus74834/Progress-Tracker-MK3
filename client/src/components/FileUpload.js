@@ -37,7 +37,12 @@ const FileUpload = ({ onProcessed, onError, onUploadStart }) => {
         }
       });
       
-      onProcessed(response.data.data, response.data.downloadPath);
+      console.log("API response:", response.data); // For debugging
+      onProcessed(
+        response.data.data, 
+        response.data.excelData, 
+        response.data.fileInfo
+      );
     } catch (error) {
       console.error('Upload error:', error);
       const errorMessage = error.response?.data?.error || 'Error processing file. Please check the file format.';
@@ -68,24 +73,32 @@ const FileUpload = ({ onProcessed, onError, onUploadStart }) => {
         )}
       </div>
       
-      <div className="text-xs text-gray-500">
-        <p>Upload a CSV file with cadet data including:</p>
-        <ul className="list-disc list-inside mt-1 space-y-1">
-          <li>Cadet names (with rank)</li>
-          <li>P-Numbers</li>
-          <li>Subject achievements (DT, SAA, SH, NAV, etc.)</li>
-        </ul>
+      <div className="flex gap-4">
+        <button
+          onClick={handleUpload}
+          disabled={!file}
+          className={`px-4 py-2 rounded-md font-medium text-white flex items-center ${
+            file ? 'bg-blue-600 hover:bg-blue-700 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'
+          }`}
+        >
+          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+          </svg>
+          Process & Generate
+        </button>
       </div>
       
-      <button
-        onClick={handleUpload}
-        disabled={!file}
-        className={`w-full py-2 px-4 rounded-md text-white font-medium transition duration-200 ${
-          file ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400 cursor-not-allowed'
-        }`}
-      >
-        Process & Generate Report
-      </button>
+      <div className="text-xs text-gray-500 mt-3">
+        <p className="font-medium text-sm text-gray-700 mb-1">How to Get Your Cadet Data</p>
+        <ol className="list-decimal list-inside space-y-1">
+          <li>Log in to Westminster</li>
+          <li>Go to: Personnel → Cadet Qualifications → ACF Star Awards</li>
+          <li>Select: All Subjects (ACS)</li>
+          <li>Click: Actions → Download → Download as CSV</li>
+          <li>Upload: Drag and drop the CSV file here or click to browse</li>
+        </ol>
+        <p className="mt-2">That's it! The app will process your data and create a color-coded Excel report.</p>
+      </div>
     </div>
   );
 };
