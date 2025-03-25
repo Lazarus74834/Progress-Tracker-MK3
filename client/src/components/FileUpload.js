@@ -31,7 +31,10 @@ const FileUpload = ({ onProcessed, onError, onUploadStart }) => {
       const formData = new FormData();
       formData.append('file', file);
       
-      const response = await axios.post('/api/process', formData, {
+      // Use the REACT_APP_API_URL environment variable if available, otherwise fall back to default URL
+      const API_URL = process.env.REACT_APP_API_URL || 'https://mk3-progress-tracker-backend.onrender.com';
+      
+      const response = await axios.post(`${API_URL}/api/process`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }

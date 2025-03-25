@@ -11,7 +11,11 @@ const app = express();
 const PORT = process.env.PORT || 5001;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: ['https://snazzy-naiad-c2b9bf.netlify.app', 'http://localhost:3000'],
+  methods: ['GET', 'POST'],
+  credentials: true
+}));
 app.use(express.json());
 
 // Set up multer to store files in memory only
@@ -153,7 +157,7 @@ const subjectFullNames = {
   'FC': 'Fieldcraft and Tactics',
   'FA': 'First Aid',
   'EXP': 'Expedition',
-  'PHYS': 'Keeping Active (PE)',
+  'PHYS': 'Keeping Active',
   'CE': 'Community Engagement',
   'MK': 'Military Knowledge',
   'JCIC': 'Junior Cadet Instructor Cadre',
@@ -168,7 +172,6 @@ function processDataForExcel(data) {
   const cadets = data.map(row => {
     // Extract rank and name from the real data format
     const cadetField = row.Cadet || '';
-    console.log("Processing cadet field:", cadetField);
     
     // The format appears to be "Cdt [optional rank] Name"
     const rankMatch = cadetField.match(/Cdt\s+(LCpl|Cpl|Sgt|SSgt|CSM|RSM)?\s*(.*)/i);
@@ -214,10 +217,22 @@ function processDataForExcel(data) {
       );
       
       if (allSubjectsNeeded) {
-        progressionPath.requiredSubjects = ["All subjects needed for advancement"];
+        progressionPath.requiredSubjects = [`All subjects needed for ${progressionPath.nextLevel}`];
       } else {
-        progressionPath.requiredSubjects = progressionPath.requiredSubjects.map(subject => {
-          return subjectFullNames[subject] || subject;
+        progressionPath.requiredSubjects = progressionPath.requiredSubjects.map(subjectWithLevel => {
+          // Handle special case for Master Cadet and other non-standard messages
+          if (!subjectWithLevel.includes('(')) {
+            return subjectWithLevel;
+          }
+          
+          // Parse the subject code and level from the format "CODE (Level)"
+          const matches = subjectWithLevel.match(/^(\w+)\s*\((.+)\)$/);
+          if (matches && matches.length === 3) {
+            const [_, subjectCode, level] = matches;
+            // Convert subject code to full name and keep the level
+            return `${subjectFullNames[subjectCode] || subjectCode} (${level})`;
+          }
+          return subjectWithLevel;
         });
       }
     }
@@ -266,16 +281,37 @@ function determineStarLevel(achievements) {
     return levels.some(level => achievements[subject].includes(level));
   };
 
-  // Check for 4-Star - needs at least 2 subjects at 4* level
-  const fourStarSubjects = Object.entries(achievements)
-    .filter(([_, level]) => level && level.includes('4 Star'))
-    .length;
+  // Start by checking Basic level - this is the foundation
+  const mandatoryForBasic = ['DT', 'SH', 'FC', 'NAV', 'EXP', 'FA', 'CIS', 'PHYS'];
+  const hasBasicMandatory = mandatoryForBasic.every(subject => 
+    hasAchievement(subject, ['Basic', '1 Star', '2 Star', '3 Star', '4 Star'])
+  );
   
-  if (fourStarSubjects >= 2) {
-    return '4*';
+  if (!hasBasicMandatory) {
+    return 'Recruit'; // Not even Basic level
   }
 
-  // Check for 3-Star
+  // Check 1-Star (only if Basic is completed)
+  const mandatoryFor1Star = ['DT', 'SAA', 'SH', 'FC', 'NAV', 'EXP', 'FA', 'CIS', 'PHYS', 'CE', 'AT'];
+  const has1StarMandatory = mandatoryFor1Star.every(subject => 
+    hasAchievement(subject, ['1 Star', '2 Star', '3 Star', '4 Star'])
+  );
+  
+  if (!has1StarMandatory) {
+    return 'Basic'; // Completed Basic but not 1*
+  }
+
+  // Check 2-Star (only if 1* is completed)
+  const mandatoryFor2Star = ['DT', 'SAA', 'SH', 'FC', 'NAV', 'EXP', 'FA', 'PHYS', 'CE'];
+  const has2StarMandatory = mandatoryFor2Star.every(subject => 
+    hasAchievement(subject, ['2 Star', '3 Star', '4 Star'])
+  );
+  
+  if (!has2StarMandatory) {
+    return '1*'; // Completed 1* but not 2*
+  }
+
+  // Check 3-Star (only if 2* is completed)
   const mandatoryFor3Star = ['DT', 'SAA', 'SH', 'FC', 'NAV', 'JCIC', 'AT'];
   const has3StarMandatory = mandatoryFor3Star.every(subject => 
     hasAchievement(subject, ['3 Star', '4 Star'])
@@ -285,134 +321,138 @@ function determineStarLevel(achievements) {
     .filter(subject => !mandatoryFor3Star.includes(subject))
     .filter(subject => hasAchievement(subject, ['3 Star', '4 Star']));
   
-  if (has3StarMandatory && optionalSubjects.length >= 2) {
-    return '3*';
+  if (!has3StarMandatory || optionalSubjects.length < 2) {
+    return '2*'; // Completed 2* but not 3*
   }
 
-  // Check for 2-Star
-  const mandatoryFor2Star = ['DT', 'SAA', 'SH', 'FC', 'NAV', 'EXP', 'FA', 'PHYS', 'CE'];
-  const has2StarMandatory = mandatoryFor2Star.every(subject => 
-    hasAchievement(subject, ['2 Star', '3 Star', '4 Star'])
-  );
+  // Check 4-Star (only if 3* is completed)
+  const fourStarSubjects = Object.entries(achievements)
+    .filter(([_, level]) => level && level.includes('4 Star'))
+    .length;
   
-  if (has2StarMandatory) {
-    return '2*';
+  if (fourStarSubjects < 2) {
+    return '3*'; // Completed 3* but not 4*
   }
 
-  // Check for 1-Star
-  const mandatoryFor1Star = ['DT', 'SAA', 'SH', 'FC', 'NAV', 'EXP', 'FA', 'CIS', 'PHYS', 'CE', 'AT'];
-  const has1StarMandatory = mandatoryFor1Star.every(subject => 
-    hasAchievement(subject, ['1 Star', '2 Star', '3 Star', '4 Star'])
-  );
-  
-  if (has1StarMandatory) {
-    return '1*';
-  }
-
-  // Check for Basic - 8 mandatory subjects at Basic or higher
-  const mandatoryForBasic = ['DT', 'SH', 'FC', 'NAV', 'EXP', 'FA', 'CIS', 'PHYS'];
-  const hasBasicMandatory = mandatoryForBasic.every(subject => 
-    hasAchievement(subject, ['Basic', '1 Star', '2 Star', '3 Star', '4 Star'])
-  );
-  
-  if (hasBasicMandatory) {
-    return 'Basic';
-  }
-
-  // Default to Recruit
-  return 'Recruit';
+  // If we get here, all previous levels are complete and 4* requirements are met
+  return '4*';
 }
 
 // Generate progression path
 function generateProgressionPath(achievements, currentStarLevel) {
   let nextLevel;
   let requiredSubjects = [];
+  
+  // Helper function to check if cadet has completed a specific level for a subject
+  const hasAchievement = (subject, levels) => {
+    if (!achievements[subject] || !achievements[subject].trim()) {
+      return false;
+    }
+    return levels.some(level => achievements[subject].includes(level));
+  };
+
+  // Helper function to check the highest level completed for a subject
+  const getHighestLevel = (subject) => {
+    if (!achievements[subject] || !achievements[subject].trim()) return '';
+    if (achievements[subject].includes('4 Star')) return '4 Star';
+    if (achievements[subject].includes('3 Star')) return '3 Star';
+    if (achievements[subject].includes('2 Star')) return '2 Star';
+    if (achievements[subject].includes('1 Star')) return '1 Star';
+    if (achievements[subject].includes('Basic')) return 'Basic';
+    return '';
+  };
 
   switch (currentStarLevel) {
     case 'Recruit':
       nextLevel = 'Basic';
-      requiredSubjects = [
-        'DT', 'SH', 'FC', 'NAV', 'EXP', 'FA', 'CIS', 'PHYS'
-      ].filter(subject => 
-        !achievements[subject] || !['Basic', '1 Star', '2 Star', '3 Star', '4 Star'].some(level => 
-          achievements[subject].includes(level)
-        )
-      );
+      // For recruits, show what's missing to get to Basic level with required level indicator
+      const basicSubjects = ['DT', 'SH', 'FC', 'NAV', 'EXP', 'FA', 'CIS', 'PHYS'];
+      requiredSubjects = basicSubjects
+        .filter(subject => !hasAchievement(subject, ['Basic', '1 Star', '2 Star', '3 Star', '4 Star']))
+        .map(subject => `${subject} (Basic)`);
       break;
+    
     case 'Basic':
       nextLevel = '1*';
-      requiredSubjects = [
-        'DT', 'SAA', 'SH', 'FC', 'NAV', 'EXP', 'FA', 'CIS', 'PHYS', 'CE', 'AT'
-      ].filter(subject => 
-        !achievements[subject] || !['1 Star', '2 Star', '3 Star', '4 Star'].some(level => 
-          achievements[subject].includes(level)
-        )
-      );
+      // For Basic level cadets, show what's missing to get to 1* with required level indicator
+      const oneStarSubjects = ['DT', 'SAA', 'SH', 'FC', 'NAV', 'EXP', 'FA', 'CIS', 'PHYS', 'CE', 'AT'];
+      requiredSubjects = oneStarSubjects
+        .filter(subject => !hasAchievement(subject, ['1 Star', '2 Star', '3 Star', '4 Star']))
+        .map(subject => `${subject} (1 Star)`);
       break;
+    
     case '1*':
       nextLevel = '2*';
-      requiredSubjects = [
-        'DT', 'SAA', 'SH', 'FC', 'NAV', 'EXP', 'FA', 'PHYS', 'CE'
-      ].filter(subject => 
-        !achievements[subject] || !['2 Star', '3 Star', '4 Star'].some(level => 
-          achievements[subject].includes(level)
-        )
-      );
+      // For 1* cadets, show what's missing to get to 2* with required level indicator
+      const twoStarSubjects = ['DT', 'SAA', 'SH', 'FC', 'NAV', 'EXP', 'FA', 'PHYS', 'CE'];
+      requiredSubjects = twoStarSubjects
+        .filter(subject => !hasAchievement(subject, ['2 Star', '3 Star', '4 Star']))
+        .map(subject => `${subject} (2 Star)`);
       break;
+    
     case '2*':
       nextLevel = '3*';
+      // For 2* cadets, show what's missing to get to 3* with required level indicator
       const mandatoryFor3Star = ['DT', 'SAA', 'SH', 'FC', 'NAV', 'JCIC', 'AT'];
-      const missingMandatory = mandatoryFor3Star.filter(subject => 
-        !achievements[subject] || !['3 Star', '4 Star'].some(level => 
-          achievements[subject].includes(level)
-        )
-      );
+      const missingMandatory = mandatoryFor3Star
+        .filter(subject => !hasAchievement(subject, ['3 Star', '4 Star']))
+        .map(subject => `${subject} (3 Star)`);
       
       // Check for optionals - need at least 2 at 3* level
-      const optionalSubjects = Object.keys(achievements)
-        .filter(subject => !mandatoryFor3Star.includes(subject));
-      
+      const optionalSubjects = ['MK', 'EXP', 'FA', 'CIS', 'PHYS', 'CE'];
       const completedOptionals = optionalSubjects.filter(subject => 
-        achievements[subject] && ['3 Star', '4 Star'].some(level => 
-          achievements[subject].includes(level)
-        )
+        hasAchievement(subject, ['3 Star', '4 Star'])
       );
       
+      // Start with missing mandatory subjects
       requiredSubjects = [...missingMandatory];
       
+      // If they don't have enough optional subjects, suggest some
       if (completedOptionals.length < 2) {
-        // Add the most advanced optional subjects to the list
+        // Find the most advanced optional subjects (those closest to 3*)
         const remainingOptionals = optionalSubjects
           .filter(subject => !completedOptionals.includes(subject))
           .sort((a, b) => {
             const aLevel = achievements[a] || '';
             const bLevel = achievements[b] || '';
-            return bLevel.localeCompare(aLevel); // Sort by highest level achieved
+            // Prioritize subjects with 2* over lower levels
+            if (aLevel.includes('2 Star') && !bLevel.includes('2 Star')) return -1;
+            if (!aLevel.includes('2 Star') && bLevel.includes('2 Star')) return 1;
+            return bLevel.localeCompare(aLevel);
           });
         
-        requiredSubjects.push(...remainingOptionals.slice(0, 2 - completedOptionals.length));
+        // Add enough optionals to meet the requirement, with level indicator
+        const optionalSuggestions = remainingOptionals
+          .slice(0, 2 - completedOptionals.length)
+          .map(subject => `${subject} (3 Star)`);
+        
+        requiredSubjects.push(...optionalSuggestions);
       }
       break;
+    
     case '3*':
       nextLevel = '4*';
+      // For 3* cadets, show what's missing to get to 4* with required level indicator
       // Need at least 2 subjects at 4* level
       const completed4Star = Object.entries(achievements)
         .filter(([_, level]) => level && level.includes('4 Star'))
         .map(([subject, _]) => subject);
       
       if (completed4Star.length < 2) {
-        // Prioritize subjects already at 3* level
+        // Prioritize subjects already at 3* level for upgrade to 4*
         const possibleUpgrades = Object.entries(achievements)
           .filter(([_, level]) => level && level.includes('3 Star') && !level.includes('4 Star'))
-          .map(([subject, _]) => subject);
+          .map(([subject, _]) => `${subject} (4 Star)`);
         
         requiredSubjects = possibleUpgrades.slice(0, 2 - completed4Star.length);
       }
       break;
+    
     case '4*':
       nextLevel = 'Master Cadet';
       requiredSubjects = ['Complete other requirements for Master Cadet qualification'];
       break;
+    
     default:
       nextLevel = 'N/A';
       requiredSubjects = [];

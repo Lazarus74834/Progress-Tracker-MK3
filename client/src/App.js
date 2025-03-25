@@ -14,7 +14,6 @@ function App() {
   const [showTrainingLevel, setShowTrainingLevel] = useState(false);
 
   const handleFileProcessed = (data, excelData, fileInfo) => {
-    console.log("Processed data:", data); // For debugging
     setProcessedData(data);
     setExcelData(excelData);
     setFileInfo(fileInfo);

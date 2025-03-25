@@ -6,11 +6,6 @@ const ProgressTable = ({ data, showTrainingLevel }) => {
     return <div className="text-gray-500">No data available to display</div>;
   }
 
-  // For debugging
-  console.log("Progress table data:", data);
-  console.log("First cadet data:", data.cadets[0]);
-  console.log("Showing Training Level:", showTrainingLevel);
-
   // Function to convert achieved level to training level
   const getTrainingLevel = (achievedLevel) => {
     switch (achievedLevel) {

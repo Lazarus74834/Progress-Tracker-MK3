@@ -13,57 +13,84 @@ A web application for tracking cadet progression through the Army Cadet Force st
 - Excel report generation
 - Responsive design for desktop and mobile
 
-## Deployment Options
+## Deployment Guide
 
-### Option 1: Deploy to Netlify (Easiest)
+### Recommended Approach: Split Deployment (Frontend on Netlify, Backend on Render)
 
-1. Create a free Netlify account at https://www.netlify.com/
+This application is set up as a split deployment with:
+- Frontend on Netlify (for fast static hosting)
+- Backend on Render (for server processing)
+
+#### Step 1: Deploy the Backend to Render
+
+1. Create a free account at https://render.com
+2. From your dashboard, click "New" and select "Web Service"
+3. Connect your repository or use "Deploy from existing repository"
+4. Configure the service:
+   - **Name**: mk3-progress-tracker-backend
+   - **Root Directory**: server (if your repo has the server folder)
+   - **Environment**: Node
+   - **Build Command**: npm install
+   - **Start Command**: npm start
+   - **Plan**: Free
+
+5. Add environment variables:
+   - `NODE_ENV`: production
+   - `PORT`: 10000 (Render will automatically assign a port)
+
+6. Click "Create Web Service" and wait for deployment
+7. Note your backend URL (e.g., https://mk3-progress-tracker-backend.onrender.com)
+
+#### Step 2: Deploy the Frontend to Netlify
+
+1. Create a free account at https://www.netlify.com/
 2. Install Netlify CLI: `npm install -g netlify-cli`
-3. Build the application: 
+3. Update the backend URL in `.env.production`:
+   ```
+   REACT_APP_API_URL=https://your-backend-url.onrender.com
+   ```
+4. Build the frontend: 
    ```
    cd client
    npm run build
    ```
-4. Deploy with Netlify:
+5. Deploy to Netlify:
    ```
-   netlify deploy
+   netlify deploy --dir=build
    ```
-5. Follow the prompts and specify the `client/build` directory as your publish directory
-6. Once you confirm everything looks correct, deploy to production:
+6. After testing the draft URL, deploy to production:
    ```
-   netlify deploy --prod
+   netlify deploy --prod --dir=build
    ```
 
-### Option 2: Deploy to Heroku
+### Alternative Options
+
+#### Option 1: Deploy Everything to Heroku
 
 1. Create a free Heroku account at https://www.heroku.com/
 2. Install Heroku CLI: https://devcenter.heroku.com/articles/heroku-cli
 3. Login to Heroku: `heroku login`
 4. Create a new Heroku app: `heroku create acf-progress-tracker`
-5. Add a Procfile to the root directory with: `web: npm start`
-6. Push to Heroku:
+5. Push to Heroku:
    ```
    git add .
    git commit -m "Prepare for deployment"
-   git push heroku master
+   git push heroku main
    ```
 
-### Option 3: Local Hosting (for Internal Network)
+#### Option 2: Local Hosting (for Internal Network)
 
 1. Build the client app:
    ```
    cd client
    npm run build
    ```
-2. Install serve globally:
+2. Start the server (which will serve both API and static files):
    ```
-   npm install -g serve
+   cd ..
+   npm start
    ```
-3. Serve the application:
-   ```
-   serve -s build -l 3000
-   ```
-4. The app will be available at http://localhost:3000 or on your local network at http://your-ip-address:3000
+3. The app will be available at http://localhost:5001 or on your local network at http://your-ip-address:5001
 
 ## Development Setup
 
