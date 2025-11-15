@@ -5,6 +5,16 @@ const csv = require('csv-parser');
 const XLSX = require('xlsx');
 const path = require('path');
 const fs = require('fs');
+const { Readable } = require('stream');
+
+// Import new progression engine
+const {
+  getStarProgress,
+  generateProgressionPath: generatePath,
+  STAR_DISPLAY_NAMES
+} = require('./progressionEngine');
+
+const { SUBJECT_CODES } = require('./syllabusConfig');
 
 // Initialize Express app
 const app = express();
@@ -33,9 +43,8 @@ app.post('/api/process', upload.single('file'), (req, res) => {
     // Convert buffer to string and parse CSV
     const fileContent = req.file.buffer.toString('utf8');
     const results = [];
-    
+
     // Use csv-parser with a stream from the string
-    const { Readable } = require('stream');
     const readableStream = new Readable();
     readableStream.push(fileContent);
     readableStream.push(null); // Signal the end of the stream
@@ -82,89 +91,8 @@ app.post('/api/process', upload.single('file'), (req, res) => {
   }
 });
 
-// Clean up workbooks that are older than 15 minutes
-function cleanupOldWorkbooks() {
-  if (!app.locals.workbooks) return;
-  
-  const now = Date.now();
-  Object.keys(app.locals.workbooks).forEach(key => {
-    if (app.locals.workbooks[key].expiresAt < now) {
-      delete app.locals.workbooks[key];
-    }
-  });
-}
-
-// New endpoint to download Excel file directly from memory
-app.get('/api/excel', (req, res) => {
-  const sessionId = req.query.session;
-  
-  console.log("Excel download request with session ID:", sessionId);
-  console.log("Available workbooks:", Object.keys(app.locals.workbooks || {}));
-  
-  if (!sessionId) {
-    console.error("No session ID provided");
-    return res.status(400).json({ error: 'No session ID provided' });
-  }
-  
-  if (!app.locals.workbooks) {
-    console.error("No workbooks stored in app.locals");
-    return res.status(404).json({ error: 'No workbooks available' });
-  }
-  
-  if (!app.locals.workbooks[sessionId]) {
-    console.error(`Workbook with session ID ${sessionId} not found`);
-    return res.status(404).json({ error: 'Excel file not found or expired. Please process the data again.' });
-  }
-  
-  try {
-    console.log(`Retrieved workbook with session ID: ${sessionId}`);
-    const { workbook } = app.locals.workbooks[sessionId];
-    
-    // Generate a formatted date for the filename
-    const now = new Date();
-    const formattedDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const fileName = `ACF_Progress_Report_${formattedDate}.xlsx`;
-    
-    // Set headers for Excel download
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-    
-    // Write directly to the response
-    console.log("Generating Excel buffer...");
-    const excelBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-    console.log(`Generated Excel buffer of size: ${excelBuffer.length} bytes`);
-    
-    res.setHeader('Content-Length', excelBuffer.length);
-    res.send(excelBuffer);
-    
-    console.log(`Successfully sent Excel file for session ID: ${sessionId}`);
-    
-    // Remove the workbook from memory after download
-    delete app.locals.workbooks[sessionId];
-    console.log(`Removed workbook from memory for session ID: ${sessionId}`);
-  } catch (error) {
-    console.error('Error generating Excel file:', error);
-    res.status(500).json({ error: 'Error generating Excel file' });
-  }
-});
-
-// Subject name mapping with corrected acronyms
-const subjectFullNames = {
-  'DT': 'Drill and Turnout',
-  'SAA': 'Skill at Arms',
-  'SH': 'Shooting',
-  'NAV': 'Navigation',
-  'FC': 'Fieldcraft and Tactics',
-  'FA': 'First Aid',
-  'EXP': 'Expedition',
-  'PHYS': 'Keeping Active',
-  'CE': 'Community Engagement',
-  'MK': 'Military Knowledge',
-  'JCIC': 'Junior Cadet Instructor Cadre',
-  'SCIC': 'Senior Cadet Instructor Cadre',
-  'AT': 'Adventurous Training',
-  'CIS': 'Communications and Information Systems'
-};
+// Subject name mapping with corrected acronyms (now imported from config)
+const subjectFullNames = SUBJECT_CODES;
 
 // Process data for Excel output
 function processDataForExcel(data) {
@@ -199,42 +127,17 @@ function processDataForExcel(data) {
       CIS: row.CIS || ''
     };
 
-    // Determine star level
-    const starLevel = determineStarLevel(achievements);
+    // Use new progression engine
+    const cadetInfo = { rank, flags: {} };
+    const { highestComplete, training, passedModules } = getStarProgress(achievements, cadetInfo);
+    const starLevel = STAR_DISPLAY_NAMES[highestComplete];
 
-    // Generate progression path
-    const progressionPath = generateProgressionPath(achievements, starLevel);
-    
-    // Convert short subject names to full names in the required subjects list
-    if (progressionPath && progressionPath.requiredSubjects) {
-      // Check if the cadet needs all subjects for their current level
-      const allSubjectsNeeded = (
-        (starLevel === 'Recruit' && progressionPath.requiredSubjects.length === 8) ||
-        (starLevel === 'Basic' && progressionPath.requiredSubjects.length === 11) ||
-        (starLevel === '1*' && progressionPath.requiredSubjects.length === 9) ||
-        (starLevel === '2*' && progressionPath.requiredSubjects.length >= 9) ||
-        (starLevel === '3*' && progressionPath.requiredSubjects.length >= 7)
-      );
-      
-      if (allSubjectsNeeded) {
-        progressionPath.requiredSubjects = [`All subjects needed for ${progressionPath.nextLevel}`];
-      } else {
-        progressionPath.requiredSubjects = progressionPath.requiredSubjects.map(subjectWithLevel => {
-          // Handle special case for Master Cadet and other non-standard messages
-          if (!subjectWithLevel.includes('(')) {
-            return subjectWithLevel;
-          }
-          
-          // Parse the subject code and level from the format "CODE (Level)"
-          const matches = subjectWithLevel.match(/^(\w+)\s*\((.+)\)$/);
-          if (matches && matches.length === 3) {
-            const [_, subjectCode, level] = matches;
-            // Convert subject code to full name and keep the level
-            return `${subjectFullNames[subjectCode] || subjectCode} (${level})`;
-          }
-          return subjectWithLevel;
-        });
-      }
+    // Generate progression path using new engine (pass current achieved level, not training level)
+    const progressionPath = generatePath(achievements, highestComplete, passedModules);
+
+    // If cadet needs many subjects, summarize
+    if (progressionPath && progressionPath.requiredSubjects && progressionPath.requiredSubjects.length > 7) {
+      progressionPath.requiredSubjects = [`All subjects needed for ${progressionPath.nextLevel}`];
     }
 
     // Set rank as 'Rct' for recruits
@@ -272,197 +175,7 @@ function processDataForExcel(data) {
   };
 }
 
-// Determine star level based on achievements
-function determineStarLevel(achievements) {
-  const hasAchievement = (subject, levels) => {
-    if (!achievements[subject] || !achievements[subject].trim()) {
-      return false;
-    }
-    return levels.some(level => achievements[subject].includes(level));
-  };
-
-  // Start by checking Basic level - this is the foundation
-  const mandatoryForBasic = ['DT', 'SH', 'FC', 'NAV', 'EXP', 'FA', 'CIS', 'PHYS'];
-  const hasBasicMandatory = mandatoryForBasic.every(subject => 
-    hasAchievement(subject, ['Basic', '1 Star', '2 Star', '3 Star', '4 Star'])
-  );
-  
-  if (!hasBasicMandatory) {
-    return 'Recruit'; // Not even Basic level
-  }
-
-  // Check 1-Star (only if Basic is completed)
-  const mandatoryFor1Star = ['DT', 'SAA', 'SH', 'FC', 'NAV', 'EXP', 'FA', 'CIS', 'PHYS', 'CE', 'AT'];
-  const has1StarMandatory = mandatoryFor1Star.every(subject => 
-    hasAchievement(subject, ['1 Star', '2 Star', '3 Star', '4 Star'])
-  );
-  
-  if (!has1StarMandatory) {
-    return 'Basic'; // Completed Basic but not 1*
-  }
-
-  // Check 2-Star (only if 1* is completed)
-  const mandatoryFor2Star = ['DT', 'SAA', 'SH', 'FC', 'NAV', 'EXP', 'FA', 'PHYS', 'CE'];
-  const has2StarMandatory = mandatoryFor2Star.every(subject => 
-    hasAchievement(subject, ['2 Star', '3 Star', '4 Star'])
-  );
-  
-  if (!has2StarMandatory) {
-    return '1*'; // Completed 1* but not 2*
-  }
-
-  // Check 3-Star (only if 2* is completed)
-  const mandatoryFor3Star = ['DT', 'SAA', 'SH', 'FC', 'NAV', 'JCIC', 'AT'];
-  const has3StarMandatory = mandatoryFor3Star.every(subject => 
-    hasAchievement(subject, ['3 Star', '4 Star'])
-  );
-  
-  const optionalSubjects = Object.keys(achievements)
-    .filter(subject => !mandatoryFor3Star.includes(subject))
-    .filter(subject => hasAchievement(subject, ['3 Star', '4 Star']));
-  
-  if (!has3StarMandatory || optionalSubjects.length < 2) {
-    return '2*'; // Completed 2* but not 3*
-  }
-
-  // Check 4-Star (only if 3* is completed)
-  const fourStarSubjects = Object.entries(achievements)
-    .filter(([_, level]) => level && level.includes('4 Star'))
-    .length;
-  
-  if (fourStarSubjects < 2) {
-    return '3*'; // Completed 3* but not 4*
-  }
-
-  // If we get here, all previous levels are complete and 4* requirements are met
-  return '4*';
-}
-
-// Generate progression path
-function generateProgressionPath(achievements, currentStarLevel) {
-  let nextLevel;
-  let requiredSubjects = [];
-  
-  // Helper function to check if cadet has completed a specific level for a subject
-  const hasAchievement = (subject, levels) => {
-    if (!achievements[subject] || !achievements[subject].trim()) {
-      return false;
-    }
-    return levels.some(level => achievements[subject].includes(level));
-  };
-
-  // Helper function to check the highest level completed for a subject
-  const getHighestLevel = (subject) => {
-    if (!achievements[subject] || !achievements[subject].trim()) return '';
-    if (achievements[subject].includes('4 Star')) return '4 Star';
-    if (achievements[subject].includes('3 Star')) return '3 Star';
-    if (achievements[subject].includes('2 Star')) return '2 Star';
-    if (achievements[subject].includes('1 Star')) return '1 Star';
-    if (achievements[subject].includes('Basic')) return 'Basic';
-    return '';
-  };
-
-  switch (currentStarLevel) {
-    case 'Recruit':
-      nextLevel = 'Basic';
-      // For recruits, show what's missing to get to Basic level with required level indicator
-      const basicSubjects = ['DT', 'SH', 'FC', 'NAV', 'EXP', 'FA', 'CIS', 'PHYS'];
-      requiredSubjects = basicSubjects
-        .filter(subject => !hasAchievement(subject, ['Basic', '1 Star', '2 Star', '3 Star', '4 Star']))
-        .map(subject => `${subject} (Basic)`);
-      break;
-    
-    case 'Basic':
-      nextLevel = '1*';
-      // For Basic level cadets, show what's missing to get to 1* with required level indicator
-      const oneStarSubjects = ['DT', 'SAA', 'SH', 'FC', 'NAV', 'EXP', 'FA', 'CIS', 'PHYS', 'CE', 'AT'];
-      requiredSubjects = oneStarSubjects
-        .filter(subject => !hasAchievement(subject, ['1 Star', '2 Star', '3 Star', '4 Star']))
-        .map(subject => `${subject} (1 Star)`);
-      break;
-    
-    case '1*':
-      nextLevel = '2*';
-      // For 1* cadets, show what's missing to get to 2* with required level indicator
-      const twoStarSubjects = ['DT', 'SAA', 'SH', 'FC', 'NAV', 'EXP', 'FA', 'PHYS', 'CE'];
-      requiredSubjects = twoStarSubjects
-        .filter(subject => !hasAchievement(subject, ['2 Star', '3 Star', '4 Star']))
-        .map(subject => `${subject} (2 Star)`);
-      break;
-    
-    case '2*':
-      nextLevel = '3*';
-      // For 2* cadets, show what's missing to get to 3* with required level indicator
-      const mandatoryFor3Star = ['DT', 'SAA', 'SH', 'FC', 'NAV', 'JCIC', 'AT'];
-      const missingMandatory = mandatoryFor3Star
-        .filter(subject => !hasAchievement(subject, ['3 Star', '4 Star']))
-        .map(subject => `${subject} (3 Star)`);
-      
-      // Check for optionals - need at least 2 at 3* level
-      const optionalSubjects = ['MK', 'EXP', 'FA', 'CIS', 'PHYS', 'CE'];
-      const completedOptionals = optionalSubjects.filter(subject => 
-        hasAchievement(subject, ['3 Star', '4 Star'])
-      );
-      
-      // Start with missing mandatory subjects
-      requiredSubjects = [...missingMandatory];
-      
-      // If they don't have enough optional subjects, suggest some
-      if (completedOptionals.length < 2) {
-        // Find the most advanced optional subjects (those closest to 3*)
-        const remainingOptionals = optionalSubjects
-          .filter(subject => !completedOptionals.includes(subject))
-          .sort((a, b) => {
-            const aLevel = achievements[a] || '';
-            const bLevel = achievements[b] || '';
-            // Prioritize subjects with 2* over lower levels
-            if (aLevel.includes('2 Star') && !bLevel.includes('2 Star')) return -1;
-            if (!aLevel.includes('2 Star') && bLevel.includes('2 Star')) return 1;
-            return bLevel.localeCompare(aLevel);
-          });
-        
-        // Add enough optionals to meet the requirement, with level indicator
-        const optionalSuggestions = remainingOptionals
-          .slice(0, 2 - completedOptionals.length)
-          .map(subject => `${subject} (3 Star)`);
-        
-        requiredSubjects.push(...optionalSuggestions);
-      }
-      break;
-    
-    case '3*':
-      nextLevel = '4*';
-      // For 3* cadets, show what's missing to get to 4* with required level indicator
-      // Need at least 2 subjects at 4* level
-      const completed4Star = Object.entries(achievements)
-        .filter(([_, level]) => level && level.includes('4 Star'))
-        .map(([subject, _]) => subject);
-      
-      if (completed4Star.length < 2) {
-        // Prioritize subjects already at 3* level for upgrade to 4*
-        const possibleUpgrades = Object.entries(achievements)
-          .filter(([_, level]) => level && level.includes('3 Star') && !level.includes('4 Star'))
-          .map(([subject, _]) => `${subject} (4 Star)`);
-        
-        requiredSubjects = possibleUpgrades.slice(0, 2 - completed4Star.length);
-      }
-      break;
-    
-    case '4*':
-      nextLevel = 'Master Cadet';
-      requiredSubjects = ['Complete other requirements for Master Cadet qualification'];
-      break;
-    
-    default:
-      nextLevel = 'N/A';
-      requiredSubjects = [];
-  }
-
-  return {
-    nextLevel,
-    requiredSubjects
-  };
-}
+// Old functions removed - now using progressionEngine.js
 
 // Sort cadets by star level, rank, and name
 function sortCadets(cadets) {
@@ -616,9 +329,6 @@ if (process.env.NODE_ENV === 'production') {
     res.sendFile(path.resolve(__dirname, '../../client/build', 'index.html'));
   });
 }
-
-// Set up periodic cleanup (every 5 minutes)
-setInterval(cleanupOldWorkbooks, 5 * 60 * 1000);
 
 // Start server
 app.listen(PORT, () => {
