@@ -21,8 +21,13 @@ const app = express();
 const PORT = process.env.PORT || 5001;
 
 // Middleware
+const allowedOrigins = [
+  'http://localhost:3000',
+  process.env.FRONTEND_URL
+].filter(Boolean);
+
 app.use(cors({
-  origin: ['https://snazzy-naiad-c2b9bf.netlify.app', 'http://localhost:3000'],
+  origin: allowedOrigins,
   methods: ['GET', 'POST'],
   credentials: true
 }));

@@ -1,13 +1,13 @@
 # Mk3 Progress Tracker Deployment Instructions
 
-## Option 1: Deploy with Netlify (Recommended for Simplicity)
+## Option 1: Deploy with Render (Recommended)
 
-Netlify offers a simple, free hosting solution that's perfect for this application.
+Render offers free hosting with automatic deployments from GitHub.
 
 ### Prerequisites:
 - Git installed on your computer
-- GitHub account (optional, but recommended)
-- Netlify account (free)
+- GitHub account
+- Render account (free at render.com)
 
 ### Steps:
 
@@ -15,65 +15,46 @@ Netlify offers a simple, free hosting solution that's perfect for this applicati
    - Go to github.com and sign in
    - Click the "+" icon in the top right and select "New repository"
    - Name your repository (e.g., "mk3-progress-tracker")
-   - Make it public or private as you prefer
+   - Make it public
    - Click "Create repository"
-   - Follow GitHub's instructions to push your code to the repository
+   - Push your code to the repository:
+     ```bash
+     git init
+     git add .
+     git commit -m "Initial commit"
+     git branch -M main
+     git remote add origin https://github.com/yourusername/mk3-progress-tracker.git
+     git push -u origin main
+     ```
 
-2. **Deploy to Netlify**:
-   - Sign up for a free Netlify account at netlify.com
-   - From your Netlify dashboard, click "New site from Git"
-   - Choose GitHub and authorize Netlify to access your repositories
-   - Select your mk3-progress-tracker repository
-   - Configure the build settings:
-     - Build command: `cd client && npm install && npm run build`
-     - Publish directory: `client/build`
-   - Click "Deploy site"
+2. **Deploy to Render**:
+   - Sign up for a free Render account at render.com
+   - From your Render dashboard, click "New +" and select "Web Service"
+   - Connect your GitHub repository
+   - Configure the service:
+     - **Name**: acf-progress-tracker (or your choice)
+     - **Environment**: Node
+     - **Build Command**: `npm run build`
+     - **Start Command**: `npm start`
+     - **Instance Type**: Free
 
-3. **Configure environment variables** (if needed):
-   - In Netlify dashboard, go to Site settings > Build & deploy > Environment
-   - Add any required environment variables
+3. **Configure environment variables**:
+   - In Render dashboard, go to your service > Environment
+   - Add the following environment variables:
+     - `NODE_ENV` = `production`
+     - `FRONTEND_URL` = (your Render service URL, e.g., `https://acf-progress-tracker.onrender.com`)
+     - `PORT` = `5001` (optional, Render sets this automatically)
+   - Click "Save Changes"
 
-Your site will be live at a Netlify URL (e.g., https://your-site-name.netlify.app).
+4. **Deploy**:
+   - Click "Manual Deploy" > "Deploy latest commit"
+   - Wait for the build to complete
+   - Your app will be live at your Render URL
 
-## Option 2: Deploy with Heroku
+### Automatic Deployments:
+- Render automatically redeploys when you push to your main branch on GitHub
 
-Heroku provides a platform for easily deploying both the frontend and backend together.
-
-### Prerequisites:
-- Git installed on your computer
-- Heroku account (free)
-- Heroku CLI installed
-
-### Steps:
-
-1. **Create a Heroku app**:
-   ```
-   heroku login
-   heroku create acf-progress-tracker
-   ```
-
-2. **Push to Heroku**:
-   ```
-   git add .
-   git commit -m "Ready for deployment"
-   git push heroku main
-   ```
-   
-   If you're not using git yet, initialize it first:
-   ```
-   git init
-   git add .
-   git commit -m "Initial commit"
-   ```
-
-3. **Open the deployed app**:
-   ```
-   heroku open
-   ```
-
-Your app will be available at https://acf-progress-tracker.herokuapp.com (or whatever name you chose).
-
-## Option 3: Local Network Deployment
+## Option 2: Local Network Deployment
 
 For running on a local network (e.g., within a detachment).
 

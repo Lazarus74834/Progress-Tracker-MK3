@@ -11,13 +11,77 @@ const {
 
 /**
  * Parse a cadet's achievements from CSV row into a Set of achieved module codes
+ * Handles v2.3 Navigation and Expedition merge logic:
+ * - At Basic, 1*, 2*: CSV has separate NAV and EXP columns, but syllabus treats them as combined
+ * - At 3*, 4*: They're separate in both CSV and syllabus
+ *
  * @param {Object} achievements - Raw achievement data from CSV (e.g., { DT: '1 Star', SAA: 'Basic', ... })
  * @returns {Set<string>} - Set of achieved module codes (e.g., 'basic.DT', '1.DT', '2.DT')
  */
 function parseModuleAchievements(achievements) {
   const passedModules = new Set();
 
+  // Helper to determine the minimum achievement level between NAV and EXP
+  // v2.3: At Basic/1*/2*, cadet needs BOTH NAV and EXP at the same level
+  // We take the minimum (whichever is lower) as the combined NAVEXP level
+  function getCombinedNavExpLevel(navAchievement, expAchievement) {
+    if (!navAchievement?.trim() || !expAchievement?.trim()) {
+      return null; // One or both missing
+    }
+
+    const levels = ['Basic', '1 Star', '2 Star', '3 Star', '4 Star'];
+    const navLevel = levels.findIndex(l => navAchievement.includes(l));
+    const expLevel = levels.findIndex(l => expAchievement.includes(l));
+
+    if (navLevel === -1 || expLevel === -1) return null;
+
+    // Take minimum (lower achievement)
+    const minLevel = Math.min(navLevel, expLevel);
+    return levels[minLevel];
+  }
+
+  // Handle NAVEXP combination for Basic, 1*, and 2*
+  const navAch = achievements.NAV;
+  const expAch = achievements.EXP;
+  const combinedLevel = getCombinedNavExpLevel(navAch, expAch);
+
+  if (combinedLevel) {
+    // Add combined NAVEXP achievements for Basic, 1*, 2*
+    if (combinedLevel.includes('4 Star') || combinedLevel.includes('3 Star') ||
+        combinedLevel.includes('2 Star') || combinedLevel.includes('1 Star') ||
+        combinedLevel.includes('Basic')) {
+      passedModules.add('basic.NAVEXP');
+    }
+    if (combinedLevel.includes('4 Star') || combinedLevel.includes('3 Star') ||
+        combinedLevel.includes('2 Star') || combinedLevel.includes('1 Star')) {
+      passedModules.add('1.NAVEXP');
+    }
+    if (combinedLevel.includes('4 Star') || combinedLevel.includes('3 Star') ||
+        combinedLevel.includes('2 Star')) {
+      passedModules.add('2.NAVEXP');
+    }
+
+    // At 3* and 4*, NAV and EXP are separate again
+    // Add separate NAV achievements
+    if (navAch.includes('3 Star') || navAch.includes('4 Star')) {
+      passedModules.add('3.NAV');
+    }
+    if (navAch.includes('4 Star')) {
+      passedModules.add('4.NAV');
+    }
+
+    // Add separate EXP achievements
+    if (expAch.includes('3 Star') || expAch.includes('4 Star')) {
+      passedModules.add('3.EXP');
+    }
+    if (expAch.includes('4 Star')) {
+      passedModules.add('4.EXP');
+    }
+  }
+
+  // Process all other subjects normally (excluding NAV and EXP since we handled them above)
   Object.entries(achievements).forEach(([subject, achievement]) => {
+    if (subject === 'NAV' || subject === 'EXP') return; // Already handled
     if (!achievement || !achievement.trim()) return;
 
     const achievementStr = achievement.trim();
